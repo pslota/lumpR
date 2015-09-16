@@ -281,8 +281,8 @@ lump_grass_post <- function(
     sub_stats[,"area"] <- sub_stats[,"area"]/1e6 #convert m? to km?
       
     # calculate stats of LUs in each subbasin and subbasin drainage ("drains_to")
-    sub_stats <- cbind(sub_stats, NA, NA, NA, NA, NA)
-    colnames(sub_stats)[c(3:7)] <- c("drains_to", "lag_time", "retention", "description", "a_stream_order")
+    sub_stats <- cbind(sub_stats, NA, NA, NA, NA, NA, NA)
+    colnames(sub_stats)[c(3:8)] <- c("lat", "drains_to", "lag_time", "retention", "description", "a_stream_order")
     sub_lu_stats <- NULL
     execGRASS("g.remove", rast="MASK_t,MASK", flags=c("f"))  
     for (SUB in sub_stats[,1]) {
@@ -291,6 +291,18 @@ lump_grass_post <- function(
       execGRASS("r.mapcalculator", amap=subbasin, outfile="MASK_t", formula=paste("if(A==", SUB,",1,null())", sep=""), flags=c("overwrite"))
       # set temp mask
       execGRASS("r.mask", input="MASK_t", flags=c("o"))
+      
+  ### LATITUDE OF SUBBASIN centroids ###   
+      # calculate centroid for SUB
+      sub_centr <- execGRASS("r.volume", data=subbasin, flags=c("f"), intern=TRUE)
+      
+      # get latutide in GRASS units
+      sub_centr <- data.frame(x=as.numeric(strsplit(sub_centr, ":")[[1]][5]), y=as.numeric(strsplit(sub_centr, ":")[[1]][6]))
+      
+      # convert to decimal degree
+      coordinates(sub_centr) <- c("x","y")
+      projection(sub_centr) <- getLocationProj()
+      sub_lat <- spTransform(sub_centr, "+proj=longlat")@coords[,"y"]
       
   ### SUBBASIN drainage ###
       s_row <- which(sub_stats[,"pid"] == SUB)
@@ -331,6 +343,7 @@ lump_grass_post <- function(
       # save
       sub_stats[s_row, "lag_time"] <- flowtime_med
       sub_stats[s_row, "retention"] <- retention
+      sub_stats[s_row, "lat"] <- as.numeric(sub_lat)
   
       write.table(sub_stats, paste(dir_out, sub_ofile, sep="/"), quote=F, row.names=F, sep="\t")
       
