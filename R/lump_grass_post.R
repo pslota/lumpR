@@ -423,8 +423,8 @@ lump_grass_post <- function(
       sub_stats[,"area"] <- sub_stats[,"area"]/1e6 #convert m? to km?
         
       # calculate stats of LUs in each subbasin and subbasin drainage ("drains_to")
-      sub_stats <- cbind(sub_stats, na_val, na_val, na_val, na_val, na_val, na_val, na_val)
-      colnames(sub_stats)[c(3:9)] <- c("x", "y", "drains_to", "lag_time", "retention", "description", "a_stream_order")
+      sub_stats <- cbind(sub_stats, na_val, na_val, na_val, na_val, na_val, na_val, na_val, na_val)
+      colnames(sub_stats)[c(3:10)] <- c("lat", "x", "y", "drains_to", "lag_time", "retention", "description", "a_stream_order")
       sub_lu_stats <- NULL
       for (SUB in sub_stats[,1]) {
         
@@ -444,6 +444,9 @@ lump_grass_post <- function(
         
         sub_stats[s_row, "x"] <- coordinates(sub_centr)[,"x"]
         sub_stats[s_row, "y"] <- coordinates(sub_centr)[,"y"]
+        
+      # convert to decimal degree
+      sub_stats[s_row, "lat"] <- spTransform(sub_centr, "+proj=longlat")@coords[,"y"]
         
     # SUBBASIN drainage #
         sub_stats[s_row,"drains_to"] <- sub_route(SUB,sub_mat,accum_mat,dir_mat) # internal function, see below
