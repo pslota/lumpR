@@ -74,6 +74,16 @@ For each table a single file has to be prepared manually and/or using functions 
    \emph{description}\cr
    \code{character}. Short subbasin name or description.
 
+     \emph{lat}\cr
+     \code{double}. Latitude of subbasin centroid in \emph{decimal degrees} (negative values for southern hemisphere).
+
+     \emph{lon}\cr
+     \code{double}. Longitude of subbasin centroid in \emph{decimal degrees west of Greenwhich}, e.g.
+     Greenwich: 0°, New York: 75°, Berlin: 345°.
+
+     \emph{elev}\cr
+     \code{double}. Average elevation above sea level of subbasin \emph{m}.
+
    \emph{drains_to}\cr
    \code{integer}. Pid of subbasin the current subbasin drains to. The outlet
    subbasin has to be labelled by one of c(9999,-9999,999,-999).
@@ -92,9 +102,6 @@ For each table a single file has to be prepared manually and/or using functions 
    \emph{retention}\cr
    \code{double}. Maximum time period in \emph{days} over which a runoff signal
    is distributed by the routing process.
-
-   \emph{lat}\cr
-   \code{double}. Latitude of subbasin centroid in \emph{decimal degree}.
 
 
  \bold{landscape_units}\cr
@@ -279,11 +286,27 @@ For each table a single file has to be prepared manually and/or using functions 
    \code{double}. \emph{Optional for Erosion modelling}.
 
    \emph{intfc}\cr
-   \code{double}. Interception capacity per unit LAI in \emph{m}.
+   \code{double}. Interception capacity per unit LAI in \emph{m}. For ECHSE's WASA engine only.
 
    \emph{crop_makk}\cr
    \code{double}. Crop-factor for calculation of pot. evapotransp. after Makkink
    (optional) \emph{[-]}.
+
+   \emph{crop_faoref}\cr
+   \code{double}. Crop-factor for calculation of pot. evapotransp. after FAO reference method
+   (optional) \emph{[-]}.
+
+   \emph{wc_etmax}\cr
+   \code{double}. Parameter giving the volumetric water content where et_act
+   equals et_pot, typically wc_etmax / wc_fk = [0.5..0.8] \emph{[m3/m3]}.
+
+   \emph{par_stressHum}\cr
+   \code{double}. Parameter to calculate water vapour deficit stomatal conductance
+   stress factor. In WASA it was a hard-coded parameter of value 0.03 \emph{[1/hPa]}.
+
+   \emph{glo_half}\cr
+   \code{double}. Solar radiation at which stomatal conductance is half of its maximum
+   \emph{[W/m2]}.
 
 
  \bold{soils}\cr
@@ -327,6 +350,25 @@ For each table a single file has to be prepared manually and/or using functions 
 
    \emph{a_f_hisand}\cr
    \code{double}. Used for internal calculations, set \code{NA}.
+
+   \emph{Phil_s}\cr
+   \code{double}. Infiltration: Philip parameter: Sorptivity;
+   calculated internally in ECHSE if set to NA value \code{ms^(-1/2)}.
+
+   \emph{Phil_a}\cr
+   \code{double}. Infiltration: Philip parameter: second term
+   parameter; calculated internally if set to NA value \code{m/s}.
+
+   \emph{Hort_ini}\cr
+   \code{double}. Infiltration: Horton parameter: initial
+   infiltration rate \code{m/s}.
+
+   \emph{Hort_end}\cr
+   \code{double}. Infiltration: Horton parameter: final
+   infiltration rate \code{m/s}.
+
+   \emph{Hort_k}\cr
+   \code{double}. Infiltration: Horton parameter: decay constant \code{1/s}.
 
 
  \bold{horizons}\cr
@@ -459,15 +501,13 @@ For each table a single file has to be prepared manually and/or using functions 
 
 
  \bold{rainy_season}\cr
- Fill in values \bold{manually} (i.e. this is not supported by this function)
- using output of \code{\link[LUMP]{rainy_season}}. You can define separate
+ Use output of \code{\link[LUMP]{rainy_season}}. You can define separate
  seasonalities for different vegetation types if you want (i.e. 'growing season'
  instead of 'rainy season'). In this case the rainy/growing season starts and ends
  differently for the respective vegetation types. This, however, is not
  respected by function \code{\link[LUMP]{rainy_season}} which determines seasonalities
  based on precipitation only. You can use the wildcard value '-1' for all
- (remaining) vegetation types. After manual fill don't forget to update 'meta_info'.
- Columns:
+ (remaining) vegetation types. Columns:
 
    \emph{pid}\cr
    \code{integer}. Dataset ID.

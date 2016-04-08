@@ -22,6 +22,9 @@ This function currently is only relevant to users who already have a parameter
 
    It is planned to add further functionality to this function when the database
    structure is being further developed.
+
+   Up to version 21 is relevant for the WASA model. Version 22 and 23 contain exclusive
+   adaptions for ECHSE's WASA engine only!
 }
 \author{
 Tobias Pilz \email{tpilz@uni-potsdam.de}, Till Francke \email{francke@uni-potsdam.de}

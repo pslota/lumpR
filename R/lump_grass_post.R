@@ -71,6 +71,19 @@
 #'      \emph{pid}\cr
 #'      Subbasin identifier.
 #'      
+#'      \emph{description}\cr
+#'      Subbasin description you can fill in manually if needed.
+#'      
+#'      \emph{lat}\cr
+#'      Latitude of subbasin centroid in \emph{decimal degrees} (negative values for southern hemisphere).
+#'      
+#'      \emph{lon}\cr
+#'      Longitude of subbasin centroid in \emph{decimal degrees west of Greenwhich}, e.g.
+#'      Greenwich: 0°, New York: 75°, Berlin: 345°.
+#'      
+#'      \emph{elev}\cr
+#'      Average elevation above sea level of subbasin \emph{m}.
+#'      
 #'      \emph{area}\cr
 #'      Subbasin area in \emph{km^2}.
 #'      
@@ -281,8 +294,8 @@ lump_grass_post <- function(
     sub_stats[,"area"] <- sub_stats[,"area"]/1e6 #convert m? to km?
       
     # calculate stats of LUs in each subbasin and subbasin drainage ("drains_to")
-    sub_stats <- cbind(sub_stats, NA, NA, NA, NA, NA, NA, NA, NA)
-    colnames(sub_stats)[c(3:10)] <- c("x", "y", "lat", "drains_to", "lag_time", "retention", "description", "a_stream_order")
+    sub_stats <- cbind(sub_stats, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)
+    colnames(sub_stats)[c(3:12)] <- c("x", "y", "lon", "lat", "elev", "drains_to", "lag_time", "retention", "description", "a_stream_order")
     sub_lu_stats <- NULL
     execGRASS("g.remove", rast="MASK_t,MASK", flags=c("f"))  
     for (SUB in sub_stats[,1]) {
@@ -301,8 +314,20 @@ lump_grass_post <- function(
       coordinates(sub_centr) <- c("x","y")
       projection(sub_centr) <- getLocationProj()
       
+      # get average evelvation of subbasin
+      cmd_out <- execGRASS("r.univar", zones=subbasin, map=dem, fs=",", flags=c("t"),intern=T)
+      cmd_out <- strsplit(cmd_out, ",")
+      elev <- as.numeric(cmd_out[[2]][grep("mean$", cmd_out[[1]])])
+      
       # convert to decimal degree
+      sub_lon <- spTransform(sub_centr, "+proj=longlat")@coords[,"x"]
       sub_lat <- spTransform(sub_centr, "+proj=longlat")@coords[,"y"]
+      
+      # longitude as decimal degrees west of Greenwich
+      if(sub_lon < 0)
+        sub_lon <- -1*sub_lon
+      else
+        sub_lon <- 360 - sub_lon
       
   ### SUBBASIN drainage ###
       s_row <- which(sub_stats[,"pid"] == SUB)
@@ -343,6 +368,8 @@ lump_grass_post <- function(
       # save
       sub_stats[s_row, "lag_time"] <- flowtime_med
       sub_stats[s_row, "retention"] <- retention
+      sub_stats[s_row, "elev"] <- elev
+      sub_stats[s_row, "lon"] <- as.numeric(sub_lon)
       sub_stats[s_row, "lat"] <- as.numeric(sub_lat)
       sub_stats[s_row, "x"] <- coordinates(sub_centr)[,"x"]
       sub_stats[s_row, "y"] <- coordinates(sub_centr)[,"y"]

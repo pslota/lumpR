@@ -31,6 +31,9 @@
 #'    It is planned to add further functionality to this function when the database
 #'    structure is being further developed.
 #'    
+#'    Up to version 21 is relevant for the WASA model. Version 22 and 23 contain exclusive
+#'    adaptions for ECHSE's WASA engine only!
+#'    
 #' @author 
 #'  Tobias Pilz \email{tpilz@@uni-potsdam.de}, Till Francke \email{francke@@uni-potsdam.de}
 #'  
@@ -177,7 +180,7 @@ db_update <- function(
     script <- gsub("\t", "", script)
     script <- paste(script, collapse=" ")
     scriptparts <- strsplit(script, ";")[[1]]
-    scriptparts <- scriptparts[-length(scriptparts)]
+    #scriptparts <- scriptparts[-length(scriptparts)]
     
     # loop over queries
     for(i in seq(along=scriptparts)){
