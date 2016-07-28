@@ -142,11 +142,11 @@ area2catena <- function(
         stop(paste0("Output directory for plots '", dir_out, "/plots_area2catena/' is not empty!"))
     }
     
-    dir.create(paste(dir_out, "plots_area2catena", sep="/"), recursive=T)
+    dir.create(paste(dir_out, "plots_area2catena", sep="/"), recursive=T, showWarnings = F)
   }
   
   # create output directory
-  dir.create(dir_out, recursive=T)
+  dir.create(dir_out, recursive=T, showWarnings = F)
   
   # argument checks
   if(is.null(flowacc))
@@ -172,24 +172,11 @@ area2catena <- function(
     
     # LOAD FILES FROM GRASS #
     message("\nLoad data from GRASS...\n")
-    # load flow accumulation
-    flowaccum <- readRAST6(flowacc)
-    flowaccum_rast <- raster(flowaccum)
-    
-    # load relative elevation
-    relelev <- readRAST6(elevriv)
-    relelev_rast <- raster(relelev)
-    
-    # load distance to river
-    dist2river <- readRAST6(distriv)
-    dist2river_rast <- raster(dist2river)
     
     # load EHAs
-    eha_in <- readRAST6(eha)
-    eha_rast <- raster(eha_in)
+    eha_rast <- raster(readRAST6(eha))
     
     # load qualitative supplemental data
-    qual_rast <- NULL # initialise object containing all qualitative raster layers
     supp_data_classnames <- NULL # initialise object containing different classnames per attribute
     n_supp_data_qual_classes <- NULL # initialise object containing number of classes per attribute
     if (!is.null(supp_qual)) 
@@ -198,75 +185,35 @@ area2catena <- function(
     if (length(supp_qual)==0) supp_qual=NULL
     if (!is.null(supp_qual)) 
     {  
-      
-      
       for (i in supp_qual) {
-        tmp <- readRAST6(i)
-        tmp2 <- raster(tmp)
-        qual_rast <- stack(tmp2, qual_rast)
-        supp_data_classnames[[i]] <- raster::unique(tmp2)
-        n_supp_data_qual_classes <- c(n_supp_data_qual_classes, length(raster::unique(tmp2)))
+        tmp <- raster(readRAST6(i))
+        supp_data_classnames[[i]] <- raster::unique(tmp)
+        n_supp_data_qual_classes <- c(n_supp_data_qual_classes, length(raster::unique(tmp)))
       }
       
       # convert (at) symbol to point (in case input comes from another GRASS mapset; readRAST6() converts it to point implicitly which causes errors during later processing)
       supp_qual <- gsub("@", ".", supp_qual)
       
       names(n_supp_data_qual_classes) <- supp_qual
-    }  
-    
-    
-    # load quantitative supplemental data
-    quant_rast <- NULL # initialise object containing all quantitative raster layers
-    for (i in rev(supp_quant)) {
-      tmp <- readRAST6(i)
-      tmp2 <- raster(tmp)
-      quant_rast <- stack(tmp2, quant_rast)
     }
     
     # convert (at) symbol to point (in case input comes from another GRASS mapset; readRAST6() converts it to point implicitly which causes errors during later processing)
     supp_quant <- gsub("@", ".", supp_quant)
     
     if(exists("tmp"))
-      rm(list=c("tmp","tmp2"))
-    
-    
-    # compare Rasters for extent, no. of rows and cols, CRS, resolution and origin
-    if (!is.null(qual_rast) & !is.null(quant_rast)) {
-      comp_val <- compareRaster(flowaccum_rast, relelev_rast, dist2river_rast, eha_rast, 
-                                qual_rast, quant_rast, res=T, orig=T)
-    } else if(is.null(qual_rast) & !is.null(quant_rast)) {
-      comp_val <- compareRaster(flowaccum_rast, relelev_rast, dist2river_rast, eha_rast, 
-                                quant_rast, res=T, orig=T)
-    } else if(!is.null(qual_rast) & is.null(quant_rast)) {
-      comp_val <- compareRaster(flowaccum_rast, relelev_rast, dist2river_rast, eha_rast, 
-                                qual_rast, res=T, orig=T)
-    } else if(is.null(qual_rast) & is.null(quant_rast)) {
-      comp_val <- compareRaster(flowaccum_rast, relelev_rast, dist2river_rast, eha_rast, 
-                                res=T, orig=T)
-    }
-    
-    
-    if (comp_val) {
-      message("All input data loaded and checked for extent, CRS and resolution successfully.")
-      if(plot_catena) {
-        message(paste0("Plots will be produced and written to '", dir_out, "/plots_area2catena/'."))
-      }
-    } else {
-      stop("ERROR: Loaded input rasters are not of the same extent, no. of rows/cols, CRS, resolution and/or origin!")
-    }
-    
-    
-    
+      rm(list=c("tmp"))
     
     
     # PROCESS EHAs #
     # get resolution of spatial data
     xres <- xres(eha_rast)
-    yres <- yres(eha_rast)
     
     # identify EHAs
     eha_ids <- raster::unique(eha_rast)
     if (!is.null(eha_subset)) eha_ids <- eha_subset
+    
+    # determine cell indices for every eha
+    eha_cells <- sapply(eha_ids, function(x) which(eha_rast@data@values == x))
     
     # LOOP over EHAs
     message(paste("\nProcessing ", length(eha_ids), " EHAs. This might take a while depending on catchment size and number of cpu cores.\n", sep=""))
@@ -298,8 +245,8 @@ area2catena <- function(
     # NOTE: in case of problems within the foreach-loop set foreach argument .errorhandling="pass" and execute str(logdata) after the loop to show error messages
     logdata <- foreach (id = 1:length(eha_ids), .combine=rbind, .errorhandling='remove', .options.multicore=list(silent=FALSE),
                         .inorder=FALSE, .export="eha_calc") %dopar% {
-      eha_calc(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, relelev_rast, supp_quant, supp_qual,
-               n_supp_data_qual_classes, quant_rast, qual_rast, supp_data_classnames,
+      eha_calc(id, eha_ids, eha_cells, flowacc, distriv, elevriv, supp_quant, supp_qual, 
+               n_supp_data_qual_classes, supp_data_classnames,
                min_cell_in_slope, max_riv_dist, plot_catena, ridge_thresh, min_catena_length,
                xres,dir_out)
     }
@@ -395,6 +342,16 @@ area2catena <- function(
     message("DONE!")
     
     
+    # stop sinking
+    closeAllConnections()
+    
+    # restore original warning mode
+    if(silent)
+      options(warn = oldw)
+    
+    
+    
+    
   
   # if an error occurs delete all temporary output
   }, error = function(e) {
@@ -417,18 +374,60 @@ area2catena <- function(
 ### Internal Function processing EHA ###
 
 
-eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, relelev_rast, supp_quant, supp_qual,
-                     n_supp_data_qual_classes, quant_rast, qual_rast, supp_data_classnames,
+eha_calc <- function(id, eha_ids, eha_cells, flowacc, distriv, elevriv, supp_quant, supp_qual, 
+                     n_supp_data_qual_classes, supp_data_classnames,
                      min_cell_in_slope, max_riv_dist, plot_catena, ridge_thresh, min_catena_length,
                      xres,dir_out, supp_quant_maxflow=NULL) {
   
   errcode <- 0
-  curr_id <- eha_ids[id] #?Till: do we need to pass the entire "eha_ids"? Wouldn't "eha_ids[id]" suffice?
+  curr_id <- eha_ids[id]
   
   # EHA: CHECKS and PREPARATIONS #    
-  # determine cell indices of curr_id
-  curr_cells <- which(eha_rast@data@values == curr_id)
+  # determine cells
+  curr_cells <- eha_cells[[id]]
   
+  # load data from GRASS location, TODO: There are problems in parallel processing mode
+  flowaccum_vals <- raster(readRAST6(flowacc))[curr_cells]
+  dist2river_vals <- raster(readRAST6(distriv))[curr_cells]
+  relelev_vals <- raster(readRAST6(elevriv))[curr_cells]
+  
+  # alternative: This, however, does not work properly (reads NULL values but cannot adapt GRASS region during parallel processing)
+#   execGRASS("r.mapcalculator", amap=eha, bmap=flowacc, outfile=paste("flowacc", curr_id, "t", sep="_"),
+#             formula=paste0("if(A == ", curr_id, ", ", flowacc, ", null())"))
+#   flowaccum_vals <- raster(readRAST6(paste("flowacc", curr_id, "t", sep="_")))
+
+  # load qualitative supplemental data
+  qual_rast <- NULL # initialise object containing all qualitative raster layers
+  if (!is.null(supp_qual)) 
+    supp_qual=supp_qual[supp_qual!=""]
+  
+  if (length(supp_qual)==0) supp_qual=NULL
+  if (!is.null(supp_qual)) 
+  {  
+    for (i in gsub(".", "@", supp_qual, fixed=T)) {
+      tmp <- raster(readRAST6(i))[curr_cells]
+      qual_rast <- cbind(tmp, qual_rast)
+    }
+    # convert (at) symbol to point (in case input comes from another GRASS mapset; readRAST6() converts it to point implicitly which causes errors during later processing)
+    supp_qual <- gsub("@", ".", supp_qual)
+    colnames(qual_rast) <- supp_qual
+  }  
+  
+  # load quantitative supplemental data
+  quant_rast <- NULL # initialise object containing all quantitative raster layers
+  for (i in gsub(".", "@", rev(supp_quant), fixed=T)) {
+    tmp <- raster(readRAST6(i))[curr_cells]
+    quant_rast <- cbind(tmp, quant_rast)
+  }
+  if(any(supp_quant))
+    colnames(quant_rast) <- supp_quant
+  
+  if(exists("tmp"))
+    rm(list=c("tmp"))
+  
+  
+  
+  # checks
   # determine number of cells in eha and skip processing if less than min_cell_in_slope
   # ERROR CODE 1
   if (length(curr_cells) < min_cell_in_slope) {
@@ -437,11 +436,7 @@ eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, rel
     #stop() # use stop instead of next in foreach loop and define '.errorhandling' #? is this necessary?
   }
   
-  # extract values out of raster objects into ordinary vectors to save time (internal calls to raster objects take time)
-  flowaccum_vals  <- flowaccum_rast [curr_cells] #?Till: in parallel mode, this requires all the large rasters to be available to each thread. I wonder is this consumes too much replicates and overhead. Passing just the area of the current curr_cells may save ressources
-  dist2river_vals <- dist2river_rast[curr_cells]
-  relelev_vals    <- relelev_rast   [curr_cells]
-  
+  # check for NAs
   na_vals = is.na(flowaccum_vals) | is.na(dist2river_vals) | is.na(relelev_vals) #detect NA values
   if (any(na_vals)) {  # cells found with NAs in the mandatory grids
     warning(paste('EHA ', curr_id, ' has NA cells flowaccum, dist2river or relative_elavation. May be OK for EHAs at divide. Cells ignored.', sep=""))
@@ -454,9 +449,9 @@ eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, rel
   
   na_vals <- NULL
   if(!is.null(quant_rast))
-    na_vals <- c(na_vals, apply(!is.finite(extract(quant_rast, curr_cells)), MARGIN=2, any))
+    na_vals <- c(na_vals, apply(!is.finite(quant_rast), MARGIN=2, any))
   if(!is.null(qual_rast))
-    na_vals <- c(na_vals, apply(!is.finite(extract(qual_rast,  curr_cells)), MARGIN=2, any))
+    na_vals <- c(na_vals, apply(!is.finite(qual_rast), MARGIN=2, any))
   
   if (any(na_vals)) {  # cells found with NAs in auxiliary grids
     warning(paste('EHA ', curr_id, ': NAs in the grid(s) ', paste(names(na_vals[na_vals]), collapse=', ') ,'.', sep=""))
@@ -493,10 +488,10 @@ eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, rel
   }
   
   # convert indices from "relative to curr_cells" to "relative to dist2river"
-  curr_entries <- curr_cells[curr_entries]
+  #curr_entries <- curr_cells[curr_entries]
   
   # compute mean catena length (calclength-method, Chochrane & Flanagan, 2003) #
-  mean_length <- sum(dist2river_rast[curr_entries]^2)/sum(dist2river_rast[curr_entries])
+  mean_length <- sum(dist2river_vals[curr_entries]^2)/sum(dist2river_vals[curr_entries])
   
   # skip very short catenas
   # ERROR CODE 4
@@ -546,7 +541,7 @@ eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, rel
       curr_entries <- which(dist2river_vals>=(j-search_range) & dist2river_vals<(j+search_range))
       
       # convert indices from "relative to curr_cells" to "relative to dist2river"
-      curr_entries <- curr_cells[curr_entries]
+      #curr_entries <- curr_cells[curr_entries]
       
       # check, if enough cells have been found to be used for averageing this point of the catena
       if (j==0 || length(curr_entries)>=min_no_cells || search_range==100) {     
@@ -562,17 +557,17 @@ eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, rel
       density[j+1] <- length(curr_entries) / length(curr_cells)
       
       # square root of flowaccumulation (~flow path density)
-      flowaccum_sqrt <- sqrt(flowaccum_rast[curr_entries])
+      flowaccum_sqrt <- sqrt(flowaccum_vals[curr_entries])
       
       # averaging of elevations of all points
       # mean weighted with square root of flowaccumulation (~flow path density)
-      out_y[j+1] <- sum(relelev_rast[curr_entries]*flowaccum_sqrt)/sum(flowaccum_sqrt)
+      out_y[j+1] <- sum(relelev_vals[curr_entries]*flowaccum_sqrt)/sum(flowaccum_sqrt)
       
       # compute average quantitative supplemental data
       if (!is.null(quant_rast)) {
         for (k in 1:length(supp_quant)) {
           #supp_attrib_mean[k,j+1] <- sum(quant_rast[curr_entries][,k]*flowaccum_sqrt)/sum(flowaccum_sqrt) 
-          supp_attrib_mean[k,j+1] <- weighted.mean(x=quant_rast[curr_entries][,k], w=flowaccum_sqrt, na.rm=TRUE)  #weighted mean, weighted with sqrt(flow_accum) and NAs removed
+          supp_attrib_mean[k,j+1] <- weighted.mean(x=quant_rast[curr_entries,k], w=flowaccum_sqrt, na.rm=TRUE)  #weighted mean, weighted with sqrt(flow_accum) and NAs removed
         }
         
       }
@@ -586,7 +581,7 @@ eha_calc <- function(id, eha_ids, eha_rast, flowaccum_rast, dist2river_rast, rel
       if (!is.null(qual_rast)) {
         for (k in supp_qual) {
           # select attribute values
-          curr_att_val <- qual_rast[curr_entries][,k]
+          curr_att_val <- qual_rast[curr_entries,k]
           # do averaging for each class of each attribute separately
           for (kk in 1:n_supp_data_qual_classes[k]) {
             supp_attrib_mean[quant_columns+kk+col_counter,j+1] <- sum((curr_att_val==supp_data_classnames[[k]][kk])*flowaccum_sqrt)/sum(flowaccum_sqrt) 
