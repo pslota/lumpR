@@ -459,7 +459,7 @@ lump_grass_post <- function(
         sub_stats[s_row, "y"] <- coordinates(sub_centr)[,"y"]
         
 		# convert to decimal degree
-		longlat <- spTransform(sub_centr, "+proj=longlat"
+		longlat <- spTransform(sub_centr, "+proj=longlat")
 		sub_stats[s_row, "lon"] <- coordinates(longlat)[,"x"]
 		sub_stats[s_row, "lat"] <- coordinates(longlat)[,"y"]
 		
