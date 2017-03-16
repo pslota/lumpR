@@ -152,15 +152,15 @@ calc_subbas <- function(
     
     message("\nInitialise function...\n")
     
-    # remove mask if there is any
-    suppressWarnings(execGRASS("r.mask", flags=c("r")))
+    # remove mask if there is any (and ignore error in case there is no mask)
+    tryCatch(suppressWarnings(execGRASS("r.mask", flags=c("r"))), error=function(e){})
     
     # remove output of previous function calls if overwrite=T
     if (overwrite) {
-      execGRASS("g.mremove", rast=paste0("*_t,",stream,"_rast,", basin_out), vect=paste0(stream,"_vect,*_t,", points_processed, "_snap,", points_processed, "_calc"), flags=c("f", "b"))
+      cmd_out <- execGRASS("g.remove", type="raster,vector", pattern=paste0("*_t,",stream,"_*,", basin_out, ",", points_processed, "_*"), flags=c("f", "b"), intern=T)
     } else {
       # remove temporary maps in any case
-      execGRASS("g.mremove", rast="*_t", vect="*_t", flags=c("f", "b"))
+      cmd_out <- execGRASS("g.remove", type="raster,vector", pattern="*_t", flags=c("f", "b"), intern=T)
     }
     
     
@@ -168,26 +168,25 @@ calc_subbas <- function(
     if(is.null(river)) {
       message("\nCalculate drainage and river network...\n")
       # GRASS watershed calculation #
-      execGRASS("r.watershed", elevation=dem, accumulation="accum_t", drainage="drain_t")
+      cmd_out <- execGRASS("r.watershed", elevation=dem, accumulation="accum_t", drainage="drain_t", flags = c("s"), intern=T)
       # check thresh_stream parameter
-      cmd_out <- execGRASS("r.univar", map="accum_t", fs="comma", flags=c("t"), intern=T)
+      cmd_out <- execGRASS("r.univar", map="accum_t", separator="comma", flags=c("t"), intern=T)
       cmd_out <- strsplit(cmd_out, ",")
       cmd_cols <- grep("^max$", cmd_out[[1]])
       max_acc <- as.numeric(cmd_out[[2]][cmd_cols])
       if(thresh_stream > max_acc)
         stop(paste0("Parameter 'thresh_stream' (", thresh_stream, ") is larger than the maximum flow accumulation within the study area (", max_acc, "). Choose a smaller parameter value!"))
       # calculate stream segments (don't use output of r.watershed as streams should be finer than generated therein)
-      execGRASS("r.mapcalculator", amap="accum_t", outfile=paste0(stream, "_rast"), 
-                formula=paste("if(abs(A)>", format(thresh_stream, scientific = F), ",1,0)", sep=""))
+      cmd_out <- execGRASS("r.mapcalc", expression=paste0(stream, "_rast = if(abs(accum_t)>", format(thresh_stream, scientific = F), ",1,null())"), intern=T)
       # thin
-      execGRASS("r.thin", input=paste0(stream, "_rast"), output=paste0(stream, "_thin_t"))
+      cmd_out <- execGRASS("r.thin", input=paste0(stream, "_rast"), output=paste0(stream, "_thin_t"), iterations=10000, intern=T)
       # convert to vector
-      execGRASS("r.to.vect", input=paste0(stream, "_thin_t"), output=paste0(stream, "_vect"), feature="line")
+      cmd_out <- execGRASS("r.to.vect", input=paste0(stream, "_thin_t"), output=paste0(stream, "_vect"), type="line", intern=T)
       river <- paste0(stream, "_vect")
       
     } else {
       message("\nCalculate drainage...\n")
-      execGRASS("r.watershed", elevation=dem, drainage="drain_t")
+      cmd_out <- execGRASS("r.watershed", elevation=dem, drainage="drain_t", flags = c("s"), intern=T)
     }
     
     
@@ -197,14 +196,14 @@ calc_subbas <- function(
       message("\nCalculate subbasins based on given area threshold...\n")
       
       # calculate subbasins
-      execGRASS("r.watershed", elevation=dem, basin="basin_calc_t", threshold=thresh_sub)
+      cmd_out <- execGRASS("r.watershed", elevation=dem, basin="basin_calc_t", threshold=thresh_sub, flags = c("s"), intern=T)
     }
     
   ### snap given drainage points to streams
     message("\nSnap given drainage points to streams...\n")
     
     # read stream vector
-    streams_vect <- readVECT6(river)
+    streams_vect <- readVECT(river)
   
     # snap points to streams
     drain_points_snap <- suppressWarnings(snapPointsToLines(drain_points, streams_vect, maxDist=snap_dist))
@@ -214,7 +213,7 @@ calc_subbas <- function(
     drain_points_snap@data <- data.frame(cat=1:nrow(drain_points_snap@data))
     
     # export drain_points_snap to GRASS
-    suppressWarnings(writeVECT6(drain_points_snap, paste0(points_processed, "_snap")))
+    suppressWarnings(writeVECT(drain_points_snap, paste0(points_processed, "_snap")))
     
     
   ### calculate catchments for every drainage point
